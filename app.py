@@ -5,137 +5,207 @@ import altair as alt
 from datetime import datetime
 from vega_datasets import data
 
-# Função para calcular os dias restantes até a data de validade
-def dias_para_vencer(row):
-    hoje = datetime.now()
-    return (row['Data Val'] - hoje).days
-
-# Função para calcular a quantidade estimada a ser consumida
-def qtd_estimada_consumir(row):
-    dias_restantes = dias_para_vencer(row)
-    return min(dias_restantes * row['MDD'], row['Quant'])
-
-# Função para classificar o risco de vencimento
-def classificar_risco(dias):
-    if dias <= 30:
-        return 'Alto Risco'
-    elif dias <= 90:
-        return 'Médio Risco'
-    else:
-        return 'Baixo Risco'
-
-# Função para calcular a idade atual do produto em porcentagem
-def idade_atual_porcentagem(row):
-    total_vida = (row['Data Val'] - row['Data Fab']).days
-    idade_atual = (datetime.now() - row['Data Fab']).days
-    return (idade_atual / total_vida) * 100 if total_vida != 0 else 0
-
-# Função para calcular a idade ao fim do consumo em porcentagem
-def idade_fim_consumo(row):
-    dias_consumir = min(row['Dias para Vencer'], qtd_estimada_consumir(row) / row['MDD'])
-    total_vida = (row['Data Val'] - row['Data Fab']).days
-    return ((dias_consumir + (datetime.now() - row['Data Fab']).days) / total_vida) * 100 if total_vida != 0 else 0
-
-# Função para calcular o total a perder
-def total_a_perder(row):
-    return max(0, row['Quant'] - qtd_estimada_consumir(row))
-
-# Carregar os dados do CSV
-csv_file = '/Users/helbertwilliamduarteteixeira/Desktop/Desk/Logica/meu_ambiente/pyplan/filial_teste.csv'
-dados = pd.read_csv(csv_file, parse_dates=['Data Fab', 'Data Val'], encoding='cp1252')
-
-# Aplicar as funções para calcular os dias restantes, a quantidade estimada a ser consumir, classificar o risco
-dados['Dias para Vencer'] = dados.apply(dias_para_vencer, axis=1)
-dados['Qtd Estimada a Consumir'] = dados.apply(qtd_estimada_consumir, axis=1)
-dados['Risco'] = dados['Dias para Vencer'].apply(classificar_risco)
-dados['Idade Atual (%)'] = dados.apply(idade_atual_porcentagem, axis=1)
-dados['Idade ao Fim do Consumo (%)'] = dados.apply(idade_fim_consumo, axis=1)
-dados['Total a Perder'] = dados.apply(total_a_perder, axis=1)
-
-# Identificar produtos a serem priorizados para consumo, ordenando-os pelo risco e pela idade atual em porcentagem
-produtos_prioridade = dados.sort_values(by=['Risco', 'Idade Atual (%)'], ascending=[True, False])
-
-# Identificar produtos prováveis de serem descartados (quantidade atual maior que a quantidade estimada a ser consumida)
-produtos_descarte = dados[dados['Quant'] > dados['Qtd Estimada a Consumir']]
-
-# Salvar os resultados
-nomes_arquivos = ['produtos_prioridade.csv', 'produtos_descarte.csv']
-produtos_prioridade.to_csv('produtos_prioridade.csv', index=False)
-produtos_descarte.to_csv('produtos_descarte.csv', index=False)
-
-# Configurando layout do dashboard
+# Configurando layout do dashboard como a primeira instrução
 st.set_page_config(layout="wide")
 
 st.title('Dashboard de Gerenciamento de Produtos')
 
-# Tabela de produtos de alto risco com filtragem
-st.header('Produtos de Alto Risco (ordenados por Dias para Vencer)')
-produtos_alto_risco = dados[dados['Risco'] == 'Alto Risco'].sort_values('Dias para Vencer')
-produtos_medio_risco = dados[dados['Risco'] == 'Médio Risco'].sort_values('Dias para Vencer')
-produtos_baixo_risco = dados[dados['Risco'] == 'Baixo Risco'].sort_values('Dias para Vencer')
-st.dataframe(produtos_alto_risco.style.highlight_max(axis=0, color='red'), use_container_width=True)  # Tabela flexível
-st.dataframe(produtos_medio_risco.style.highlight_max(axis=0, color='yellow'), use_container_width=True)  # Tabela flexível
-st.dataframe(produtos_baixo_risco.style.highlight_max(axis=0, color='green'), use_container_width=True)  # Tabela flexível
+# Adicionar um componente para upload de arquivo
+uploaded_file = st.file_uploader("Escolha um arquivo CSV", type=['csv'])
 
-# Layout de duas colunas para os gráficos de barra
-col1, col2 = st.columns(2)
+if uploaded_file is None:
+    # Exibir empty state com SVG simples
+    empty_state_placeholder = st.empty()
+    empty_state_html = """
+        <div style="display: flex; justify-content: center; align-items: center; height: 300px;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="100" height="100">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+            </svg>
+            <p style="margin-left: 10px; font-size: 20px;">Por favor, faça o upload de um arquivo CSV</p>
+        </div>
+    """
+    empty_state_placeholder.markdown(empty_state_html, unsafe_allow_html=True)
+else:
+    # Ler o arquivo CSV carregado
+    dados = pd.read_csv(uploaded_file, parse_dates=['Data Fab', 'Data Val'], encoding='utf-8')
+    
+        # Verificar se 'dados' está definido antes de usar
+    if 'dados' in locals():
 
-with col1:
-    # Histograma para idade atual (%)
-    hist_age_current = alt.Chart(dados).mark_bar().encode(
-        alt.X('Idade Atual (%):Q', bin=True), 
-        y='count()',
-        color=alt.value("steelblue")  # Cor fixa, mas você pode personalizar
-    ).properties(
-        title='Distribuição da Idade Atual dos Produtos (%)'
-    )
-    st.altair_chart(hist_age_current, use_container_width=True)
+        # Função para calcular os dias restantes até a data de validade
+        def dias_para_vencer(row):
+            hoje = datetime.now()
+            return (row['Data Val'] - hoje).days
 
-with col2:
-    # Histograma para idade ao fim do consumo (%)
-    hist_age_consumption = alt.Chart(dados).mark_bar().encode(
-        alt.X('Idade ao Fim do Consumo (%):Q', bin=True),
-        y='count()',
-        color=alt.value("salmon")  # Cor fixa, mas você pode personalizar
-    ).properties(
-        title='Distribuição da Idade ao Fim do Consumo dos Produtos (%)'
-    )
-    st.altair_chart(hist_age_consumption, use_container_width=True)
+        # Função para calcular a quantidade estimada a ser consumida
+        def qtd_estimada_consumir(row):
+            dias_restantes = dias_para_vencer(row)
+            return min(dias_restantes * row['MDD'], row['Quant'])
 
-# Colocando gráficos de histograma lado a lado
-col3, col4 = st.columns(2)
+        # Função para calcular a idade atual do produto em porcentagem
+        def idade_atual_porcentagem(row):
+            total_vida = (row['Data Val'] - row['Data Fab']).days
+            idade_atual = (datetime.now() - row['Data Fab']).days
+            return (idade_atual / total_vida) * 100 if total_vida != 0 else 0
 
-with col3:
-    # Gráfico de barras para risco de vencimento
-    bar_chart_risk = alt.Chart(dados).mark_bar().encode(
-        x=alt.X('count()', title='Quantidade'),
-        y=alt.Y('Risco', sort='-x'),
-        color='Risco'
-    ).properties(
-        title='Contagem de Produtos por Categoria de Risco'
-    )
-    st.altair_chart(bar_chart_risk, use_container_width=True)
-    st.write(dados['Risco'].unique())
-
-with col4:
-    # Gráfico de barras para dias para vencer
-    bar_chart_expiry = alt.Chart(dados).mark_bar().encode(
-        x='Dias para Vencer',
-        y='count()',
-        color='Risco',
-        tooltip=['Dias para Vencer', 'count()']
-    ).properties(
-        title='Distribuição de Produtos por Dias para Vencer'
-    )
-    st.altair_chart(bar_chart_expiry, use_container_width=True)
+        # Função para calcular a idade ao fim do consumo em porcentagem
+        def idade_fim_consumo(row):
+            dias_consumir = min(row['Dias para Vencer'], qtd_estimada_consumir(row) / row['MDD'])
+            total_vida = (row['Data Val'] - row['Data Fab']).days
+            return ((dias_consumir + (datetime.now() - row['Data Fab']).days) / total_vida) * 100 if total_vida != 0 else 0
 
 
-# GHRAFICO -
+        # Função para classificar o risco de vencimento
+        def classificar_risco(dias):
+            if dias <= 30:
+                return 'Alto Risco'
+            elif dias <= 90:
+                return 'Médio Risco'
+            else:
+                return 'Baixo Risco'
+
+        # Função para destacar riscos com cores
+        def highlight_risco(val):
+            color = ''
+            if val == 'Alto Risco':
+                color = 'red'  # Texto em vermelho para alto risco
+            elif val == 'Médio Risco':
+                color = 'orange'  # Texto em laranja para médio risco
+            elif val == 'Baixo Risco':
+                color = 'green'  # Texto em verde para baixo risco
+            return f'color: {color}'
+
+        # Função para calcular o total a perder
+        def total_a_perder(row):
+            return max(0, row['Quant'] - qtd_estimada_consumir(row))
 
 
-# Exibir os resultados no dashboard
-#'''st.write("Produtos Priorizados para Consumo (ordenados por risco e idade atual):")
-#st.dataframe(produtos_prioridade)
+        # Carregar os dados do CSV
+        #csv_file = '/Users/helbertwilliamduarteteixeira/Desktop/Desk/Logica/meu_ambiente/pyplan/filial_teste.csv'
+        #dados = pd.read_csv(csv_file, parse_dates=['Data Fab', 'Data Val'], encoding='utf-8')
 
-#st.write("Produtos Prováveis de Serem Descartados:")
-#st.dataframe(produtos_descarte'''
+        # Aplicar as funções para calcular os dias restantes, a quantidade estimada a ser consumir, classificar o risco
+        dados['Dias para Vencer'] = dados.apply(dias_para_vencer, axis=1)
+        dados['Qtd Estimada a Consumir'] = dados.apply(qtd_estimada_consumir, axis=1)
+        dados['Risco'] = dados['Dias para Vencer'].apply(classificar_risco)
+        dados['Idade Atual (%)'] = dados.apply(idade_atual_porcentagem, axis=1)
+        dados['Idade ao Fim do Consumo (%)'] = dados.apply(idade_fim_consumo, axis=1)
+        dados['Total a Perder'] = dados.apply(total_a_perder, axis=1)
+
+        # Identificar produtos a serem priorizados para consumo, ordenando-os pelo risco e pela idade atual em porcentagem
+        produtos_prioridade = dados.sort_values(by=['Risco', 'Idade Atual (%)'], ascending=[True, False])
+
+        # Identificar produtos prováveis de serem descartados (quantidade atual maior que a quantidade estimada a ser consumida)
+        produtos_descarte = dados[dados['Quant'] > dados['Qtd Estimada a Consumir']]
+
+        # Juntando os dados filtrados
+        produtos_ordenados_por_risco = pd.concat([
+            dados[dados['Risco'] == 'Alto Risco'].sort_values('Dias para Vencer'),
+            dados[dados['Risco'] == 'Médio Risco'].sort_values('Dias para Vencer'),
+            dados[dados['Risco'] == 'Baixo Risco'].sort_values('Dias para Vencer')
+        ])
+
+        # Exibindo os dados combinados
+        st.header('Produtos Ordenados por Risco')
+
+       # Colunas que serão exibidas
+        colunas_para_exibir = ['Nome', 'Risco', 'Data Val', 'Quant', 'MDD', 'Qtd Estimada a Consumir']
+
+        # Filtrar o DataFrame para exibir apenas as colunas desejadas
+        dados_filtrados = dados[colunas_para_exibir]
+
+        # Aplicar a função de destaque aos riscos no DataFrame filtrado
+        styled_df = dados_filtrados.style.applymap(lambda x: highlight_risco(x), subset=['Risco'])
+
+        # Exibir a tabela estilizada no Streamlit
+        st.dataframe(styled_df, use_container_width=True)
+        
+        # Contagem de produtos por categoria de risco
+        contagem_risco = dados.groupby('Risco')['Quant'].sum().reset_index()
+
+        # Criar uma nova coluna combinando 'Risco' e 'Quant'
+        contagem_risco['RiscoQuantidade'] = contagem_risco.apply(lambda x: f"{x['Risco']} ({x['Quant']})", axis=1)
+
+        st.markdown('##')
+
+        # Colocando gráficos de histograma lado a lado
+        col1, spacer, col2 = st.columns([1, 0.1, 1])
+
+        with col1:
+            # Histograma para idade atual (%)
+            hist_age_current = alt.Chart(dados).mark_bar().encode(
+                alt.X('Idade Atual (%):Q', bin=True), 
+                y='count()',
+                color=alt.Color('Idade Atual (%)', scale=alt.Scale(range=['#FF5733', '#33FF57']))  # Personalizando as cores
+            ).properties(
+                title='Distribuição da Idade Atual dos Produtos (%)'
+            )
+            st.altair_chart(hist_age_current, use_container_width=True)
+
+        with col2:
+            # Histograma para idade ao fim do consumo (%)
+            hist_age_consumption = alt.Chart(dados).mark_bar().encode(
+                alt.X('Idade ao Fim do Consumo (%):Q', bin=True),
+                y='count()',
+                color=alt.Color('Idade ao Fim do Consumo (%)', scale=alt.Scale(scheme='viridis'))  # Esquema de cores predefinido
+            ).properties(
+                title='Distribuição da Idade ao Fim do Consumo dos Produtos (%)'
+            )
+            st.altair_chart(hist_age_consumption, use_container_width=True)
+
+        st.markdown('##')
+
+        # Colocando gráficos de histograma lado a lado
+        col3, spacer, col4, spacer2, col5 = st.columns([1, 0.1, 1, 0.1, 1])
+    
+        #Contagem de produtos por categoria de risco
+        contagem_risco = dados.groupby('Risco').size().reset_index(name='Quant')
+
+        # Calcular a porcentagem de cada categoria de risco
+        total = contagem_risco['Quant'].sum()
+        contagem_risco['Porcentagem'] = (contagem_risco['Quant'] / total * 100).round(1)
+        
+        with col4:
+            st.markdown('##')
+            st.markdown('##')
+            st.markdown('##')
+            # Gráfico de barras para risco de vencimento
+            bar_chart_risk = alt.Chart(dados).mark_bar().encode(
+                x=alt.X('count()', title='Quantidade'),
+                y=alt.Y('Risco', sort='-x'),
+                color=alt.Color('Risco', scale=alt.Scale(range=['#FF5733', '#33FF57']))  # Personalizando as cores
+            ).properties(
+                title='Contagem de Produtos por Categoria de Risco'
+            )
+            st.altair_chart(bar_chart_risk, use_container_width=True)
+        
+        with col3:
+            # Gráfico de barras para risco de vencimento
+            pizza_chart_risk = alt.Chart(dados).mark_arc().encode(
+                theta=alt.Theta(field="Quant", type="quantitative"),
+                color=alt.Color(field="Risco", type="nominal", 
+                                scale=alt.Scale(domain=['Alto Risco', 'Médio Risco', 'Baixo Risco'],
+                                                range=['#FF5733', '#0047FF', '#33FF57'])),
+                tooltip=['Risco', 'Quant']
+            ).properties(
+                 title='Contagem de Produtos por Categoria de Risco'
+            )
+
+            # Adicionando texto com as porcentagens no gráfico de pizza
+            text = alt.Chart(contagem_risco).mark_text(radiusOffset=20, color='#FFFFFF').encode(
+                text=alt.Text('Porcentagem:N', format='.1f%'),
+                theta=alt.Theta(field="Quant", type="quantitative")
+            )
+            # Exibindo o gráfico de pizza no Streamlit
+            st.altair_chart(pizza_chart_risk + text, use_container_width=True)
+            
+        with col5:
+            # Gráfico de barras para dias para vencer
+            bar_chart_expiry = alt.Chart(dados).mark_bar().encode(
+                x='Dias para Vencer',
+                y='count()',
+                color=alt.Color('Risco', scale=alt.Scale(scheme='category10'))  # Esquema de cores predefinido
+            ).properties(
+                title='Distribuição de Produtos por Dias para Vencer'
+            )
+            st.altair_chart(bar_chart_expiry, use_container_width=True)
