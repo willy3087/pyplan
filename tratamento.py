@@ -1,18 +1,15 @@
 import csv
 import re
+from datetime import datetime
 
 # Caminho do arquivo CSV de entrada
 arquivo_entrada = '/Users/helbertwilliamduarteteixeira/Desktop/Desk/Logica/meu_ambiente/pyplan/LAYOUT STREAMLIT.csv'
 # Caminho do arquivo CSV de saída
 arquivo_saida = '/Users/helbertwilliamduarteteixeira/Desktop/Desk/Logica/meu_ambiente/pyplan/LAYOUT TRATADO.csv'
 
-# Função para remover todas as vírgulas de campos que contêm dígitos
-def remover_virgulas_em_numeros(campo):
-    # Verifica se o campo contém dígitos e possivelmente vírgulas
-    if re.match(r'^[\d,]+$', campo):
-        return campo.replace(',', '').replace('.', '') # Remove todas as vírgulas e pontos
-    else:
-        return campo
+# Função para verificar se o campo é um número com vírgula
+def eh_numero_com_virgula(campo):
+    return re.match(r'^\d+,\d+$', campo)
 
 # Função para substituir "/" por "-" em datas
 def substituir_barra_por_hifen_em_datas(campo):
