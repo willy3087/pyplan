@@ -27,33 +27,67 @@ if uploaded_file is None:
     empty_state_placeholder.markdown(empty_state_html, unsafe_allow_html=True)
 else:
     # Ler o arquivo CSV carregado
-    dados = pd.read_csv(uploaded_file, parse_dates=['Data Fab', 'Data Val'], encoding='utf-8')
-    
+    dados = pd.read_csv(uploaded_file, encoding='utf-8')
+
+    # Função para limpar e converter campos numéricos entre aspas
+    def limpar_converter_campo_numerico(campo):
+        if isinstance(campo, str):
+            # Remove as aspas, pontos e vírgulas
+            campo_limpo = campo.replace('"', '').replace('.', '').replace(',', '')
+            # Tenta converter para int, se possível
+            try:
+                return int(campo_limpo)
+            except ValueError:
+                return campo  # Retorna o campo original se a conversão falhar
+        else:
+            return campo
+
+    # Aplica a função de limpeza e conversão para cada coluna que pode conter números
+    colunas_numericas = ['Quant', 'MDD']  # Substitua por suas colunas numéricas reais
+    for coluna in colunas_numericas:
+        dados[coluna] = dados[coluna].apply(limpar_converter_campo_numerico)
+
+    # Converter 'Data Val' e 'Data Fab' para datetime explicitamente
+    dados['Data Val'] = pd.to_datetime(dados['Data Val'], errors='coerce')
+    dados['Data Fab'] = pd.to_datetime(dados['Data Fab'], errors='coerce')
+    dados = dados.replace('\.', '', regex=True)
+
         # Verificar se 'dados' está definido antes de usar
     if 'dados' in locals():
 
         # Função para calcular os dias restantes até a data de validade
         def dias_para_vencer(row):
             hoje = datetime.now()
-            return (row['Data Val'] - hoje).days
+            if pd.notnull(row['Data Val']):
+                return (row['Data Val'] - hoje).days
+            else:
+                return float('nan')  # Retorna NaN se 'Data Val' for NaT
 
         # Função para calcular a quantidade estimada a ser consumida
         def qtd_estimada_consumir(row):
             dias_restantes = dias_para_vencer(row)
-            return min(dias_restantes * row['MDD'], row['Quant'])
+            if pd.notnull(dias_restantes):
+                return min(dias_restantes * row['MDD'], row['Quant'])
+            else:
+                return float('nan')  # Retorna NaN se 'dias_restantes' for NaN
 
         # Função para calcular a idade atual do produto em porcentagem
         def idade_atual_porcentagem(row):
-            total_vida = (row['Data Val'] - row['Data Fab']).days
-            idade_atual = (datetime.now() - row['Data Fab']).days
-            return (idade_atual / total_vida) * 100 if total_vida != 0 else 0
+            if pd.notnull(row['Data Val']) and pd.notnull(row['Data Fab']):
+                total_vida = (row['Data Val'] - row['Data Fab']).days
+                idade_atual = (datetime.now() - row['Data Fab']).days
+                return (idade_atual / total_vida) * 100 if total_vida != 0 else 0
+            else:
+                return float('nan')  # Retorna NaN se 'Data Val' ou 'Data Fab' for NaT
 
         # Função para calcular a idade ao fim do consumo em porcentagem
         def idade_fim_consumo(row):
-            dias_consumir = min(row['Dias para Vencer'], qtd_estimada_consumir(row) / row['MDD'])
-            total_vida = (row['Data Val'] - row['Data Fab']).days
-            return ((dias_consumir + (datetime.now() - row['Data Fab']).days) / total_vida) * 100 if total_vida != 0 else 0
-
+            dias_consumir = qtd_estimada_consumir(row)
+            if pd.notnull(dias_consumir) and pd.notnull(row['Data Val']) and pd.notnull(row['Data Fab']):
+                total_vida = (row['Data Val'] - row['Data Fab']).days
+                return ((dias_consumir + (datetime.now() - row['Data Fab']).days) / total_vida) * 100 if total_vida != 0 else 0
+            else:
+                return float('nan')  # Retorna NaN se algum dos valores for NaN ou NaT
 
         # Função para classificar o risco de vencimento
         def classificar_risco(dias):
