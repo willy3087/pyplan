@@ -3,7 +3,6 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 from datetime import datetime
-from vega_datasets import data
 
 # Configurando layout do dashboard como a primeira instrução
 st.set_page_config(layout="wide")
@@ -190,7 +189,7 @@ else:
         st.markdown('##')
 
         # Colocando gráficos de histograma lado a lado
-        col3, spacer, col4, spacer2, col5 = st.columns([1, 0.1, 1, 0.1, 1])
+        col4, spacer, col5 = st.columns([1, 0.1, 1])
     
         #Contagem de produtos por categoria de risco
         contagem_risco = dados.groupby('Risco').size().reset_index(name='Quant')
@@ -212,27 +211,7 @@ else:
                 title='Contagem de Produtos por Categoria de Risco'
             )
             st.altair_chart(bar_chart_risk, use_container_width=True)
-        
-        with col3:
-            # Gráfico de barras para risco de vencimento
-            pizza_chart_risk = alt.Chart(dados).mark_arc().encode(
-                theta=alt.Theta(field="Quant", type="quantitative"),
-                color=alt.Color(field="Risco", type="nominal", 
-                                scale=alt.Scale(domain=['Alto Risco', 'Médio Risco', 'Baixo Risco'],
-                                                range=['#FF5733', '#0047FF', '#33FF57'])),
-                tooltip=['Risco', 'Quant']
-            ).properties(
-                 title='Contagem de Produtos por Categoria de Risco'
-            )
-
-            # Adicionando texto com as porcentagens no gráfico de pizza
-            text = alt.Chart(contagem_risco).mark_text(radiusOffset=20, color='#FFFFFF').encode(
-                text=alt.Text('Porcentagem:N', format='.1f%'),
-                theta=alt.Theta(field="Quant", type="quantitative")
-            )
-            # Exibindo o gráfico de pizza no Streamlit
-            st.altair_chart(pizza_chart_risk + text, use_container_width=True)
-            
+                    
         with col5:
             # Gráfico de barras para dias para vencer
             bar_chart_expiry = alt.Chart(dados).mark_bar().encode(
