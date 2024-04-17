@@ -42,7 +42,7 @@ with open(arquivo_entrada, 'r', encoding='utf-8') as entrada, open(arquivo_saida
         linha_atualizada = [limpar_e_converter_numero(campo) for campo in linha]
         # Escreve a linha atualizada no arquivo de saída
         # Remove todas as vírgulas em campos que contêm dígitos
-        linha_atualizada = [remover_virgulas_em_numeros(campo) for campo in linha]
+        linha_atualizada = [eh_numero_com_virgula(campo) for campo in linha]
         # Substitui "/" por "-" em campos de data
         linha_atualizada = [substituir_barra_por_hifen_em_datas(campo) for campo in linha_atualizada]
         # Remove campos vazios da linha atualizada
